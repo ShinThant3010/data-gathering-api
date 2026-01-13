@@ -1,4 +1,5 @@
 from functools import lru_cache
+import time
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -9,6 +10,7 @@ from functions.bigquery_loader import BigQueryLoader
 from functions.config import settings
 from functions.repositories.exam_repo import ExamRepository
 from functions.repositories.full_question_repo import FullQuestionRepository
+from functions.repositories.course_repo import CourseRepository
 from functions.utils.json_naming_converter import convert_keys_snake_to_camel
 
 
@@ -32,6 +34,15 @@ class UploadRequest(BaseModel):
 
 
 app = FastAPI(title="Data Gathering API", version="0.1.0")
+
+
+@app.middleware("http")
+async def add_runtime_header(request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed = time.perf_counter() - start
+    response.headers["X-Runtime-Seconds"] = f"{elapsed:.2f}"
+    return response
 
 
 def _ensure_dataset() -> str:
@@ -72,11 +83,26 @@ def get_full_question_repo() -> FullQuestionRepository:
     return FullQuestionRepository(
         bq=get_bq_client(),
         dataset=dataset,
-        question_table=settings.exam_question_result_table,
-        answer_table=settings.exam_answer_result_table,
+        question_table=settings.question_table,
+        answer_table=settings.answer_table,
         test_id_column=settings.test_id_column,
-        question_result_id_column=settings.question_result_id_column,
-        answer_result_fk_column=settings.answer_result_fk_column,
+        question_id_column=settings.question_id_column,
+        answer_fk_column=settings.answer_fk_column,
+    )
+
+@lru_cache
+def get_course_repo() -> CourseRepository:
+    dataset = _ensure_dataset()
+    return CourseRepository(
+        bq=get_bq_client(),
+        dataset=dataset,
+        course_table=settings.course_table,
+        course_id_column=settings.course_id_column,
+        course_title_column=settings.course_title_column,
+        course_created_at_column=settings.course_created_at_column,
+        course_short_desc_column=settings.course_short_desc_column,
+        course_desc_column=settings.course_desc_column,
+        course_link_column=settings.course_link_column,
     )
 
 
@@ -123,45 +149,64 @@ def upload_csv(body: UploadRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:  # pragma: no cover - surfaced to client
+    except Exception as exc: 
         raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
 
     return {"message": "upload completed", **result}
 
 
-@app.get("/v1/test-results/students/{student_id}/tests/{test_id}")
-def get_student_attempts(student_id: str, test_id: str, limit: int = 2) -> dict:
+@app.get("/v1/test-results/students/{studentId}/tests/{testId}")
+def get_student_attempts(studentId: str, testId: str, limit: int = 2) -> dict:
     repo = get_exam_repo()
+    print("student column name: ", settings.exam_result_student_column)
     try:
-        attempts = repo.get_latest_attempts(student_id=student_id, test_id=test_id, limit=limit)
+        attempts = repo.get_latest_attempts(student_id=studentId, test_id=testId, limit=limit)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except HTTPException:
         raise
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc: 
         raise HTTPException(status_code=500, detail=f"Failed to load attempts: {exc}")
 
     if not attempts:
         raise HTTPException(status_code=404, detail="No exam attempts found for student/test.")
 
-    payload = {"student_id": student_id, "test_id": test_id, "attempts": attempts}
+    payload = {"student_id": studentId, "test_id": testId, "attempts": attempts}
     return convert_keys_snake_to_camel(payload)
 
 
-@app.get("/v1/tests/{test_id}/questions")
-def get_test_questions(test_id: str) -> dict:
+@app.get("/v1/test-questions/{testId}")
+def get_test_questions(testId: str) -> dict:
     repo = get_full_question_repo()
     try:
-        questions = repo.get_questions_with_answers(test_id=test_id)
+        questions = repo.get_questions_with_answers(test_id=testId)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except HTTPException:
         raise
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc: 
         raise HTTPException(status_code=500, detail=f"Failed to load questions: {exc}")
 
     if not questions:
         raise HTTPException(status_code=404, detail="No questions found for test.")
 
-    payload = {"test_id": test_id, "questions": questions}
+    payload = {"test_id": testId, "questions": questions}
     return convert_keys_snake_to_camel(payload)
+
+
+@app.get("/v1/course-info/{courseId}")
+def get_course(courseId: str) -> dict:
+    repo = get_course_repo()
+    try:
+        course = repo.get_course(course_id=courseId)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception as exc: 
+        raise HTTPException(status_code=500, detail=f"Failed to load course: {exc}")
+
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+
+    return convert_keys_snake_to_camel({"course": course})

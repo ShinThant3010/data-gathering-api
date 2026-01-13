@@ -23,30 +23,20 @@ Environment variables (can be set in your shell or a `.env` you load before star
 - `GOOGLE_APPLICATION_CREDENTIALS` (required): path to service account JSON
 - `DATA_DIR` (optional): path to CSV folder, defaults to `./data`
 - `LOCATION` (optional): BigQuery location, e.g. `us-central1`
-- Table/column overrides for query endpoints (optional):
-  - `EXAM_RESULT_TABLE` (default `exam_result`)
-  - `EXAM_QUESTION_RESULT_TABLE` (default `exam_question_result`)
-  - `EXAM_ANSWER_RESULT_TABLE` (default `exam_answer_result`)
-  - `EXAM_RESULT_ORDER_COLUMN` (default `completed_at`)
-  - `EXAM_RESULT_STUDENT_COLUMN` (default `student_id`)
-  - `EXAM_RESULT_TEST_COLUMN` (default `test_id`)
-  - `EXAM_RESULT_ID_COLUMN` (default `id`)
-  - `EXAM_QUESTION_RESULT_ID_COLUMN` (default `id`)
-  - `EXAM_QUESTION_RESULT_FK_COLUMN` (default `exam_result_id`)
-  - `EXAM_ANSWER_RESULT_FK_COLUMN` (default `question_result_id`)
-  - `TEST_ID_COLUMN` (default `test_id`)
+  - Table/column names are fixed in code (snake_case): `exam_result`, `exam_question_result`, `exam_answer_result`, `question`, `answer`, `course` and their associated columns such as `user_id`, `test_id`, `created_at`, `exam_result_id`, `question_result_id`, `lesson_title`, `short_description`, `description`, `link`.
 
 ### Run the API
 ```bash
-uvicorn api:app --reload --port 8000
+uv run uvicorn api:app --reload --port 8080
 ```
 
 ### Endpoints
 - `GET /health` – simple readiness check
 - `GET /files` – list `.csv` files under `DATA_DIR`
 - `POST /upload` – load a CSV into BigQuery
-- `GET /students/{student_id}/tests/{test_id}/attempts` – latest attempts (default 2) with nested question/answer rows
-- `GET /tests/{test_id}/questions` – questions plus answers for a test
+- `GET /v1/test-results/students/{studentId}/tests/{testId}` – latest attempts (default 2) with nested question/answer rows (response keys camelCase)
+- `GET /v1/test-questions/{testId}` – questions plus answers for a test (response keys camelCase)
+- `GET /v1/course-info/{courseId}` – course info (id, lesson_title, created_at, short_description, description, link; response keys camelCase)
 
 Example upload request (uses defaults for dataset/table if provided via env vars):
 ```bash

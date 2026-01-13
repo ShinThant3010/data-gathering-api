@@ -12,24 +12,33 @@ class Settings:
     data_dir: Path = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
     location: Optional[str] = os.getenv("LOCATION")
 
-    question_table: str = os.getenv("QUESTION_TABLE", "question")
-    answer_table: str = os.getenv("ANSWER_TABLE", "answer")
+    # Fixed table/column names (no env override)
+    question_table: str = "question"
+    answer_table: str = "answer"
 
-    exam_result_table: str = os.getenv("EXAM_RESULT_TABLE", "exam_result")
-    exam_question_result_table: str = os.getenv("EXAM_QUESTION_RESULT_TABLE", "exam_question_result")
-    exam_answer_result_table: str = os.getenv("EXAM_ANSWER_RESULT_TABLE", "exam_answer_result")
+    exam_result_table: str = "exam_result"
+    exam_question_result_table: str = "exam_question_result"
+    exam_answer_result_table: str = "exam_answer_result"
 
-    question_id_column: str = os.getenv("QUESTION_ID_COLUMN", "id")
-    test_id_column: str = os.getenv("TEST_ID_COLUMN", "testId")
-    answer_fk_column: str = os.getenv("QUESTION_ANSWER_ID_COLUMN", "questionId")
+    question_id_column: str = "id"
+    test_id_column: str = "test_id"
+    answer_fk_column: str = "question_id"
 
-    exam_result_order_column: str = os.getenv("EXAM_RESULT_ORDER_COLUMN", "createdAt")
-    exam_result_student_column: str = os.getenv("EXAM_RESULT_STUDENT_COLUMN", "userId")
-    exam_result_test_column: str = os.getenv("EXAM_RESULT_TEST_COLUMN", "testId")
-    exam_result_id_column: str = os.getenv("EXAM_RESULT_ID_COLUMN", "id")
-    question_result_id_column: str = os.getenv("EXAM_QUESTION_RESULT_ID_COLUMN", "id")
-    question_result_fk_column: str = os.getenv("EXAM_QUESTION_RESULT_FK_COLUMN", "examResultId")
-    answer_result_fk_column: str = os.getenv("EXAM_ANSWER_RESULT_FK_COLUMN", "examResultQuestionId")
+    exam_result_order_column: str = "created_at"
+    exam_result_student_column: str = "user_id"
+    exam_result_test_column: str = "test_id"
+    exam_result_id_column: str = "id"
+    question_result_id_column: str = "id"
+    question_result_fk_column: str = "exam_result_id"
+    answer_result_fk_column: str = "exam_result_question_id"
+
+    course_table: str = "course"
+    course_id_column: str = "id"
+    course_title_column: str = "lesson_title"
+    course_created_at_column: str = "created_at"
+    course_short_desc_column: str = "short_description"
+    course_desc_column: str = "description"
+    course_link_column: str = "link"
 
     def ensure_data_dir(self) -> Path:
         path = Path(self.data_dir).expanduser()
