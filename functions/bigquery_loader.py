@@ -59,3 +59,46 @@ class BigQueryLoader:
             "bytes_processed": str(load_job.output_bytes),
             "state": load_job.state,
         }
+
+    def load_jsonl(
+        self,
+        jsonl_path: Path,
+        dataset: str,
+        table: str,
+        *,
+        write_disposition: str = "WRITE_TRUNCATE",
+        autodetect: bool = True,
+    ) -> Dict[str, str]:
+        if write_disposition not in VALID_WRITE_DISPOSITIONS:
+            raise ValueError(f"write_disposition must be one of {sorted(VALID_WRITE_DISPOSITIONS)}")
+        if not dataset or not table:
+            raise ValueError("dataset and table must both be provided.")
+
+        if not jsonl_path.exists():
+            raise FileNotFoundError(f"JSONL file not found at {jsonl_path}")
+
+        table_id = f"{self.project_id}.{dataset}.{table}"
+        job_config = bigquery.LoadJobConfig(
+            source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+            autodetect=autodetect,
+            write_disposition=write_disposition,
+        )
+
+        with jsonl_path.open("rb") as jsonl_file:
+            load_job = self.client.load_table_from_file(
+                jsonl_file,
+                destination=table_id,
+                job_config=job_config,
+                location=self.location,
+            )
+
+        load_job.result()
+        destination_table = self.client.get_table(table_id)
+
+        return {
+            "job_id": load_job.job_id,
+            "table": table_id,
+            "rows_written": str(destination_table.num_rows),
+            "bytes_processed": str(load_job.output_bytes),
+            "state": load_job.state,
+        }

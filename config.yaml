@@ -1,0 +1,33 @@
+project_id:
+default_dataset:
+default_table:
+data_dir: data
+location:
+
+# Fixed table/column names
+question_table: question
+answer_table: answer
+
+exam_result_table: exam_result
+exam_question_result_table: exam_question_result
+exam_answer_result_table: exam_answer_result
+
+question_id_column: id
+test_id_column: test_id
+answer_fk_column: question_id
+
+exam_result_order_column: created_at
+exam_result_student_column: user_id
+exam_result_test_column: test_id
+exam_result_id_column: id
+question_result_id_column: id
+question_result_fk_column: exam_result_id
+answer_result_fk_column: exam_result_question_id
+
+course_table: course
+course_id_column: id
+course_title_column: lesson_title
+course_created_at_column: created_at
+course_short_desc_column: short_description
+course_desc_column: description
+course_link_column: link

@@ -17,10 +17,10 @@ from functions.utils.json_naming_converter import convert_keys_snake_to_camel
 class UploadRequest(BaseModel):
     file_name: str = Field(..., description="CSV file name located in the data directory")
     dataset: Optional[str] = Field(
-        None, description="BigQuery dataset; falls back to BIGQUERY_DATASET env var if omitted"
+        None, description="BigQuery dataset; falls back to config.yaml default_dataset if omitted"
     )
     table: Optional[str] = Field(
-        None, description="BigQuery table; falls back to BIGQUERY_TABLE env var if omitted"
+        None, description="BigQuery table; falls back to config.yaml default_table if omitted"
     )
     write_disposition: Literal["WRITE_EMPTY", "WRITE_APPEND", "WRITE_TRUNCATE"] = Field(
         "WRITE_TRUNCATE", description="How to write into the destination table"
@@ -30,6 +30,22 @@ class UploadRequest(BaseModel):
     )
     skip_leading_rows: int = Field(
         1, ge=0, description="Number of header rows to skip before ingesting data"
+    )
+
+
+class UploadJsonRequest(BaseModel):
+    file_name: str = Field(..., description="JSONL file name located in the data directory")
+    dataset: Optional[str] = Field(
+        None, description="BigQuery dataset; falls back to config.yaml default_dataset if omitted"
+    )
+    table: Optional[str] = Field(
+        None, description="BigQuery table; falls back to config.yaml default_table if omitted"
+    )
+    write_disposition: Literal["WRITE_EMPTY", "WRITE_APPEND", "WRITE_TRUNCATE"] = Field(
+        "WRITE_TRUNCATE", description="How to write into the destination table"
+    )
+    autodetect: bool = Field(
+        True, description="Let BigQuery infer schema from the JSONL payload"
     )
 
 
@@ -47,14 +63,19 @@ async def add_runtime_header(request, call_next):
 
 def _ensure_dataset() -> str:
     if not settings.default_dataset:
-        raise HTTPException(status_code=500, detail="BIGQUERY_DATASET environment variable is required.")
+        raise HTTPException(
+            status_code=500,
+            detail="default_dataset must be set in config.yaml or provided in the request.",
+        )
     return settings.default_dataset
 
 
 @lru_cache
 def get_bq_client() -> BigQueryClient:
     if not settings.project_id:
-        raise HTTPException(status_code=500, detail="GCP_PROJECT_ID environment variable is required.")
+        raise HTTPException(
+            status_code=500, detail="project_id must be set in config.yaml."
+        )
     return BigQueryClient(project_id=settings.project_id, location=settings.location)
 
 
@@ -114,22 +135,23 @@ def health() -> dict:
 @app.get("/files")
 def list_files() -> dict:
     data_dir = settings.ensure_data_dir()
-    files = sorted(p.name for p in data_dir.glob("*.csv"))
-    return {"data_dir": str(data_dir), "files": files}
+    csv_files = sorted(p.name for p in data_dir.glob("*.csv"))
+    jsonl_files = sorted(p.name for p in data_dir.glob("*.jsonl"))
+    return {"data_dir": str(data_dir), "csv_files": csv_files, "jsonl_files": jsonl_files}
 
 
-@app.post("/upload")
+@app.post("/upload-csv")
 def upload_csv(body: UploadRequest) -> dict:
     project_id = settings.project_id
     if not project_id:
-        raise HTTPException(status_code=500, detail="GCP_PROJECT_ID environment variable is required.")
+        raise HTTPException(status_code=500, detail="project_id must be set in config.yaml.")
 
     dataset = body.dataset or settings.default_dataset
     table = body.table or settings.default_table
     if not dataset or not table:
         raise HTTPException(
             status_code=400,
-            detail="Provide dataset and table in the request or set BIGQUERY_DATASET and BIGQUERY_TABLE.",
+            detail="Provide dataset/table in the request or set defaults in config.yaml.",
         )
 
     data_dir = settings.ensure_data_dir()
@@ -150,6 +172,42 @@ def upload_csv(body: UploadRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc: 
+        raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
+
+    return {"message": "upload completed", **result}
+
+
+@app.post("/upload-json")
+def upload_json(body: UploadJsonRequest) -> dict:
+    project_id = settings.project_id
+    if not project_id:
+        raise HTTPException(status_code=500, detail="project_id must be set in config.yaml.")
+
+    dataset = body.dataset or settings.default_dataset
+    table = body.table or settings.default_table
+    if not dataset or not table:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide dataset/table in the request or set defaults in config.yaml.",
+        )
+
+    data_dir = settings.ensure_data_dir()
+    loader = BigQueryLoader(project_id=project_id, location=settings.location)
+    jsonl_path = data_dir / body.file_name
+
+    try:
+        result = loader.load_jsonl(
+            jsonl_path=jsonl_path,
+            dataset=dataset,
+            table=table,
+            write_disposition=body.write_disposition,
+            autodetect=body.autodetect,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
 
     return {"message": "upload completed", **result}
