@@ -213,12 +213,12 @@ def upload_json(body: UploadJsonRequest) -> dict:
     return {"message": "upload completed", **result}
 
 
-@app.get("/v1/test-results/students/{studentId}/tests/{testId}")
-def get_student_attempts(studentId: str, testId: str, limit: int = 2) -> dict:
+@app.get("/v1/test-results/{examResultId}/students/{studentId}/tests/{testId}")
+def get_student_attempts(examResultId: str, studentId: str, testId: str, limit: int = 2) -> dict:
     repo = get_exam_repo()
     print("student column name: ", settings.exam_result_student_column)
     try:
-        attempts = repo.get_latest_attempts(student_id=studentId, test_id=testId, limit=limit)
+        attempts = repo.get_latest_attempts(exam_result_id=examResultId, student_id=studentId, test_id=testId, limit=limit)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except HTTPException:
@@ -227,9 +227,9 @@ def get_student_attempts(studentId: str, testId: str, limit: int = 2) -> dict:
         raise HTTPException(status_code=500, detail=f"Failed to load attempts: {exc}")
 
     if not attempts:
-        raise HTTPException(status_code=404, detail="No exam attempts found for student/test.")
+        raise HTTPException(status_code=404, detail="No exam attempts found for result/student/test.")
 
-    payload = {"student_id": studentId, "test_id": testId, "attempts": attempts}
+    payload = {"exam_result_id": examResultId, "student_id": studentId, "test_id": testId, "attempts": attempts}
     return convert_keys_snake_to_camel(payload)
 
 

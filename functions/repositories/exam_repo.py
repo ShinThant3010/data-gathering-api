@@ -41,11 +41,11 @@ class ExamRepository:
         self.answer_result_fk_column = _ensure_safe_identifier(answer_result_fk_column, "answer result FK column")
 
     def get_latest_attempts(
-        self, *, student_id: str, test_id: str, limit: int = 2
+        self, *, exam_result_id: str, student_id: str, test_id: str, limit: int = 2
     ) -> List[Dict[str, Any]]:
         """Return latest exam attempts with nested question + answer results."""
         safe_limit = max(1, min(limit, 5))  # guardrail to prevent runaway queries
-        exam_results = self._fetch_exam_results(student_id=student_id, test_id=test_id, limit=safe_limit)
+        exam_results = self._fetch_exam_results(exam_result_id=exam_result_id, student_id=student_id, test_id=test_id, limit=safe_limit)
         if not exam_results:
             return []
 
@@ -81,17 +81,19 @@ class ExamRepository:
             )
         return attempts
 
-    def _fetch_exam_results(self, *, student_id: str, test_id: str, limit: int) -> List[dict[str, Any]]:
+    def _fetch_exam_results(self, *, exam_result_id: str, student_id: str, test_id: str, limit: int) -> List[dict[str, Any]]:
         table = self.bq.table_ref(self.dataset, self.exam_result_table)
         sql = f"""
         SELECT *
         FROM {table}
-        WHERE {self.exam_result_student_column} = @student_id
+        WHERE {self.exam_result_id_column} = @exam_result_id
+          AND {self.exam_result_student_column} = @student_id
           AND {self.exam_result_test_column} = @test_id
         ORDER BY {self.exam_result_order_column} DESC
         LIMIT {limit}
         """
         params: Sequence[bigquery.ScalarQueryParameter] = [
+            bigquery.ScalarQueryParameter("exam_result_id", "STRING", exam_result_id),
             bigquery.ScalarQueryParameter("student_id", "STRING", student_id),
             bigquery.ScalarQueryParameter("test_id", "STRING", test_id),
         ]
